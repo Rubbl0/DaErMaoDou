@@ -1,0 +1,10 @@
+{
+  "roaming": true,
+  "sound_enabled": true,
+  "always_on_top": true,
+  "auto_sleep": true,
+  "show_mini_todo": false,
+  "water_reminder": false,
+  "sitting_reminder": false,
+  "follow_mouse": false
+}
