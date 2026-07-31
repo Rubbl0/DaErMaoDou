@@ -1540,7 +1540,7 @@ class DesktopPet:
         window.title("B站@布洛Blo  小红书@madoka")
         window.resizable(False, False)
         window.attributes("-topmost", True)
-        width, height = 350, 560
+        width, height = 360, 660
         x = max(0, int(self.x + self.window_size / 2 - width / 2))
         y = max(0, int(self.y - height + 80))
         window.geometry(f"{width}x{height}+{x}+{y}")
@@ -1604,7 +1604,7 @@ class DesktopPet:
         ).pack(fill="x", padx=12, pady=(0, 5))
 
         buttons = tk.Frame(window, bg="#fff0f4")
-        buttons.pack(pady=15)
+        buttons.pack(side="bottom", pady=15)
 
         def apply_and_close() -> None:
             try:
