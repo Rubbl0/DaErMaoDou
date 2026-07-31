@@ -14,7 +14,6 @@ import uuid
 import winreg
 import winsound
 from pathlib import Path
-from PIL import Image, ImageTk
 import pygame
 
 
@@ -82,8 +81,7 @@ class DesktopPet:
         self.todos_path = app_dir() / "todos.json"
         self.settings = self._load_settings()
         self.todos = self._load_todos()
-        self.pet_size_percent = int(self.settings["pet_size_percent"])
-        self.window_size = round(WINDOW_SIZE * self.pet_size_percent / 100)
+        self.window_size = WINDOW_SIZE
         self.volume = int(self.settings["volume"])
         self.sound_cache: dict[str, pygame.mixer.Sound] = {}
         try:
@@ -203,7 +201,6 @@ class DesktopPet:
             "sitting_reminder": False,
             "follow_mouse": False,
             "volume": 70,
-            "pet_size_percent": 100,
         }
         if not self.settings_path.exists():
             return defaults
@@ -211,12 +208,11 @@ class DesktopPet:
             loaded = json.loads(self.settings_path.read_text(encoding="utf-8"))
             for key in defaults:
                 if key in loaded:
-                    if key in ("volume", "pet_size_percent"):
+                    if key == "volume":
                         defaults[key] = int(loaded[key])
                     else:
                         defaults[key] = bool(loaded[key])
             defaults["volume"] = max(0, min(100, defaults["volume"]))
-            defaults["pet_size_percent"] = max(60, min(160, defaults["pet_size_percent"]))
         except (OSError, ValueError, TypeError):
             pass
         return defaults
@@ -232,7 +228,6 @@ class DesktopPet:
             sitting_reminder=self.sitting_reminder_enabled,
             follow_mouse=self.follow_mouse_enabled,
             volume=self.volume,
-            pet_size_percent=self.pet_size_percent,
         )
         self.settings_path.write_text(
             json.dumps(self.settings, ensure_ascii=False, indent=2),
@@ -286,16 +281,14 @@ class DesktopPet:
                 except FileNotFoundError:
                     pass
 
-    def _load_images(self) -> dict[str, ImageTk.PhotoImage | list[ImageTk.PhotoImage]]:
+    def _load_images(self) -> dict[str, tk.PhotoImage | list[tk.PhotoImage]]:
         assets = resource_dir()
 
-        def load(name: str) -> ImageTk.PhotoImage:
+        def load(name: str) -> tk.PhotoImage:
             path = assets / name
             if not path.exists():
                 raise FileNotFoundError(f"缺少素材：{path}")
-            image = Image.open(path).convert("RGBA")
-            image = image.resize((self.window_size, self.window_size), Image.Resampling.LANCZOS)
-            return ImageTk.PhotoImage(image)
+            return tk.PhotoImage(file=str(path)).subsample(4, 4)
 
         return {
             "idle": load("front_master.png"),
@@ -323,7 +316,7 @@ class DesktopPet:
         self.canvas.bind("<Button-3>", self.show_menu)
         self.root.bind("<Escape>", lambda _event: self.close())
 
-    def _show(self, image: ImageTk.PhotoImage) -> None:
+    def _show(self, image: tk.PhotoImage) -> None:
         self.canvas.itemconfigure(self.sprite, image=image)
 
     def _play_sound(self, name: str) -> None:
@@ -1540,7 +1533,7 @@ class DesktopPet:
         window.title("B站@布洛Blo  小红书@madoka")
         window.resizable(False, False)
         window.attributes("-topmost", True)
-        width, height = 360, 660
+        width, height = 360, 570
         x = max(0, int(self.x + self.window_size / 2 - width / 2))
         y = max(0, int(self.y - height + 80))
         window.geometry(f"{width}x{height}+{x}+{y}")
@@ -1561,7 +1554,6 @@ class DesktopPet:
         follow_mouse_var = tk.BooleanVar(value=self.follow_mouse_enabled)
         startup_var = tk.BooleanVar(value=self._is_auto_start_enabled())
         volume_var = tk.IntVar(value=self.volume)
-        pet_size_var = tk.IntVar(value=self.pet_size_percent)
 
         options = tk.Frame(window, bg="#fff7f9", bd=1, relief="solid")
         options.pack(fill="x", padx=18, pady=(0, 4))
@@ -1596,12 +1588,6 @@ class DesktopPet:
             activebackground="#df8195", highlightthickness=0, fg="#55434a",
             font=("Microsoft YaHei UI", 10),
         ).pack(fill="x", padx=12, pady=(5, 0))
-        tk.Scale(
-            sliders, from_=60, to=160, orient="horizontal", variable=pet_size_var,
-            label="\u684c\u5ba0\u5927\u5c0f (%)", resolution=5, bg="#fff7f9", troughcolor="#f6c3d0",
-            activebackground="#df8195", highlightthickness=0, fg="#55434a",
-            font=("Microsoft YaHei UI", 10),
-        ).pack(fill="x", padx=12, pady=(0, 5))
 
         buttons = tk.Frame(window, bg="#fff0f4")
         buttons.pack(side="bottom", pady=15)
@@ -1619,7 +1605,6 @@ class DesktopPet:
                     topmost_var.get(),
                     startup_var.get(),
                     volume_var.get(),
-                    pet_size_var.get(),
                 )
             except OSError as exc:
                 messagebox.showerror("设置失败", str(exc), parent=window)
@@ -1642,7 +1627,6 @@ class DesktopPet:
         always_on_top: bool,
         auto_start: bool,
         volume: int,
-        pet_size_percent: int,
     ) -> None:
         roaming_changed = self.roaming != roaming
         self.roaming = roaming
@@ -1656,7 +1640,6 @@ class DesktopPet:
         follow_changed = self.follow_mouse_enabled != follow_mouse
         self.follow_mouse_enabled = follow_mouse
         self.volume = max(0, min(100, int(volume)))
-        self._set_pet_size(pet_size_percent)
         self.root.attributes("-topmost", always_on_top)
         self._set_auto_start(auto_start)
         if not sound_enabled or self.volume <= 0:
@@ -1694,22 +1677,6 @@ class DesktopPet:
                     self.action_job = None
                 self._show(self.images["idle"])
         self._save_settings()
-
-    def _set_pet_size(self, percent: int) -> None:
-        percent = max(60, min(160, int(percent)))
-        if percent == self.pet_size_percent:
-            return
-        old_size = self.window_size
-        self.pet_size_percent = percent
-        self.window_size = round(WINDOW_SIZE * percent / 100)
-        self.x += (old_size - self.window_size) / 2
-        self.y += old_size - self.window_size
-        self.x = max(self.left, min(self.x, self.right - self.window_size))
-        self.y = max(self.top, min(self.y, self.bottom - self.window_size))
-        self.canvas.configure(width=self.window_size, height=self.window_size)
-        self.images = self._load_images()
-        self._show(self.images["idle"])
-        self._place()
 
     def toggle_sound(self) -> None:
         self.sound_enabled = not self.sound_enabled
